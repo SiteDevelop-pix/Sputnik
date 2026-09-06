@@ -17,6 +17,9 @@
         .admin-panel {
           display: none !important;
         }
+        .blocked-screen {
+          display: grid !important;
+        }
         body::before {
           content: "Scripts are required to load this page.";
           position: fixed;
@@ -45,6 +48,11 @@
           <span></span>
         </div>
       </div>
+    </div>
+
+    <div id="blockedScreen" class="blocked-screen" aria-live="polite">
+      <strong>Доступ заборонено</strong>
+      <span>Цей пристрій більше не має доступу до Sputnik.</span>
     </div>
 
     <div class="page">
@@ -181,12 +189,16 @@
       <div class="admin-console-body">
         <div class="admin-grid compact-grid">
           <label>
-            title
-            <input id="adminTitleInput" type="text" />
+            week for everyone
+            <select id="adminWeekSelect">
+              <option value="auto">auto</option>
+              <option value="1">week 1</option>
+              <option value="2">week 2</option>
+            </select>
           </label>
-          <label>
-            subtitle
-            <input id="adminSubtitleInput" type="text" />
+          <label class="admin-toggle-row">
+            <input id="adminSplashToggle" type="checkbox" />
+            show loading screen on entry
           </label>
         </div>
 
@@ -220,7 +232,7 @@
         </div>
 
         <div class="device-box">
-          <div class="device-header">online</div>
+          <div class="device-header">visited devices</div>
           <ul id="deviceList" class="device-list"></ul>
         </div>
       </div>
@@ -253,6 +265,28 @@
           <label class="custom-color-option" title="Власний колір">
             <input type="color" id="customColorPicker" aria-label="Власний колір" value="#f5d000" />
           </label>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <label class="settings-label">Рандомний колір інтерфейсу</label>
+        <div class="toggle-switch">
+          <label class="switch">
+            <input type="checkbox" id="randomColorToggle" />
+            <span class="slider"></span>
+          </label>
+          <span>Кастомний колір</span>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <label class="settings-label">Кастомні шпалери</label>
+        <div class="wallpaper-picker" role="group" aria-label="Кастомні шпалери">
+          <button type="button" class="wallpaper-option wallpaper-standard active" data-wallpaper="standard" title="Стандартні"></button>
+          <button type="button" class="wallpaper-option wallpaper-grid" data-wallpaper="grid" title="Сітка"></button>
+          <button type="button" class="wallpaper-option wallpaper-dots" data-wallpaper="dots" title="Крапки"></button>
+          <button type="button" class="wallpaper-option wallpaper-diagonal" data-wallpaper="diagonal" title="Діагоналі"></button>
+          <button type="button" class="wallpaper-option wallpaper-blueprint" data-wallpaper="blueprint" title="Креслення"></button>
         </div>
       </div>
 
@@ -325,7 +359,9 @@
         adminMode: 'sputnik.adminMode',
         darkMode: 'sputnik.darkMode',
         accentColor: 'sputnik.accentColor',
-        language: 'sputnik.language'
+        language: 'sputnik.language',
+        randomColor: 'sputnik.randomColor',
+        wallpaper: 'sputnik.wallpaper'
       };
       // тумблер проверки недель: '1'|'2'|null(авто)
       let forcedWeek = localStorage.getItem('sputnik.forcedWeek'); // null = авто
@@ -443,12 +479,21 @@
       let siteState = {
         pageTitle: 'Sputnik',
         subtitle: '9-Г',
-        schedule: JSON.parse(JSON.stringify(defaultSchedule))
+        schedule: JSON.parse(JSON.stringify(defaultSchedule)),
+        forcedWeek: null,
+        splashEnabled: true,
+        blockedDevices: {}
       };
+
+      let globalWeekOverride = null;
+      let currentDeviceBlocked = false;
+      let currentDeviceId = null;
 
       let userSettings = {
         darkMode: localStorage.getItem(STORAGE_KEYS.darkMode) === '1' || false,
-        accentColor: localStorage.getItem(STORAGE_KEYS.accentColor) || 'yellow'
+        accentColor: localStorage.getItem(STORAGE_KEYS.accentColor) || 'yellow',
+        randomColor: localStorage.getItem(STORAGE_KEYS.randomColor) === '1',
+        wallpaper: localStorage.getItem(STORAGE_KEYS.wallpaper) || 'standard'
       };
 
       function t(key) {
@@ -478,11 +523,17 @@
         document.documentElement.style.setProperty('--yellow', colors.primary);
         document.documentElement.style.setProperty('--yellow-strong', colors.strong);
         document.documentElement.style.setProperty('--yellow-soft', colors.soft);
+        document.body.classList.remove('wallpaper-grid', 'wallpaper-dots', 'wallpaper-diagonal', 'wallpaper-blueprint');
+        if (userSettings.wallpaper !== 'standard') {
+          document.body.classList.add(`wallpaper-${userSettings.wallpaper}`);
+        }
       }
 
       function saveSettings() {
         localStorage.setItem(STORAGE_KEYS.darkMode, userSettings.darkMode ? '1' : '0');
         localStorage.setItem(STORAGE_KEYS.accentColor, userSettings.accentColor);
+        localStorage.setItem(STORAGE_KEYS.randomColor, userSettings.randomColor ? '1' : '0');
+        localStorage.setItem(STORAGE_KEYS.wallpaper, userSettings.wallpaper);
       }
 
       function toggleDarkMode() {
@@ -500,6 +551,22 @@
         updateSettingsUI();
       }
 
+      function setWallpaper(wallpaper) {
+        if (!['standard', 'grid', 'dots', 'diagonal', 'blueprint'].includes(wallpaper)) return;
+        userSettings.wallpaper = wallpaper;
+        applySettings();
+        saveSettings();
+        updateSettingsUI();
+      }
+
+      function applyRandomAccentIfEnabled() {
+        if (!userSettings.randomColor) return;
+        const colors = ['#ff1744', '#ff6d00', '#00c853', '#00b0ff', '#d500f9', '#ffea00', '#00e5ff'];
+        userSettings.accentColor = colors[Math.floor(Math.random() * colors.length)];
+        applySettings();
+        saveSettings();
+      }
+
       function colorMapValueIsValid(color) {
         return ['yellow', 'green', 'blue', 'red'].includes(color) || /^#[0-9a-f]{6}$/i.test(color);
       }
@@ -507,6 +574,7 @@
       function updateSettingsUI() {
         // Обновляем тему
         document.getElementById('darkModeToggle').checked = userSettings.darkMode;
+        document.getElementById('randomColorToggle').checked = userSettings.randomColor;
         document.getElementById('themeName').textContent = userSettings.darkMode ? t('dark') : t('light');
 
         // Обновляем цвет
@@ -525,6 +593,10 @@
             : '#f5d000';
           customColorPicker.parentElement.classList.toggle('active', /^#[0-9a-f]{6}$/i.test(userSettings.accentColor));
         }
+
+        document.querySelectorAll('.wallpaper-option').forEach((element) => {
+          element.classList.toggle('active', element.dataset.wallpaper === userSettings.wallpaper);
+        });
 
         // Обновляем текст в панели
         document.getElementById('settingsTitle').textContent = 'Налаштування';
@@ -594,6 +666,7 @@
       }
 
       function getWeekType() {
+        if (globalWeekOverride === '1' || globalWeekOverride === '2') return Number(globalWeekOverride);
         if (forcedWeek === '1') return 1;
         if (forcedWeek === '2') return 2;
         const { year, month, day } = getKyivParts();
@@ -616,13 +689,15 @@
         refreshViews();
       }
       function updateWeekTumblerUI() {
-        const auto = forcedWeek === null;
+        const selectedWeek = globalWeekOverride || forcedWeek;
+        const auto = selectedWeek === null;
         document.querySelectorAll('.week-btn').forEach(b=>{
           const w = b.dataset.week;
-          b.classList.toggle('active', (auto && w==='auto') || (!auto && w===forcedWeek));
+          b.classList.toggle('active', (auto && w==='auto') || (!auto && w===selectedWeek));
+          b.disabled = Boolean(globalWeekOverride);
         });
         const mark = document.getElementById('weekAutoMark');
-        if (mark) mark.textContent = auto ? '• авто' : '';
+        if (mark) mark.textContent = globalWeekOverride ? '• для всіх' : (auto ? '• авто' : '');
       }
       function getWeeklySchedule(base) {
         const wt = getWeekType();
@@ -689,6 +764,10 @@
         document.getElementById('adminPanel').classList.toggle('hidden', !isAdmin);
         if (isAdmin) {
           fillNoticeDaySelect();
+          const weekSelect = document.getElementById('adminWeekSelect');
+          const splashToggle = document.getElementById('adminSplashToggle');
+          if (weekSelect) weekSelect.value = globalWeekOverride || 'auto';
+          if (splashToggle) splashToggle.checked = siteState.splashEnabled !== false;
           const day = selectedDay || dayNames[0];
           const notices = normalizeNoticeList(dayNoticeMap[day]);
           const notice = notices[0] || { text: defaultNoticeText, type: 'warning' };
@@ -1149,25 +1228,28 @@
       }
 
       function fillAdminForm() {
-        const titleInput = document.getElementById('adminTitleInput');
-        const subtitleInput = document.getElementById('adminSubtitleInput');
-        if (titleInput) titleInput.value = siteState.pageTitle;
-        if (subtitleInput) subtitleInput.value = siteState.subtitle;
+        updateAdminUI();
       }
 
       async function saveAdminChanges() {
-        const titleInput = document.getElementById('adminTitleInput');
-        const subtitleInput = document.getElementById('adminSubtitleInput');
+        const weekSelect = document.getElementById('adminWeekSelect');
+        const splashToggle = document.getElementById('adminSplashToggle');
 
         const nextState = {
-          pageTitle: (titleInput ? titleInput.value.trim() : '') || 'Sputnik',
-          subtitle: (subtitleInput ? subtitleInput.value.trim() : '') || '9-Г',
+          pageTitle: siteState.pageTitle || 'Sputnik',
+          subtitle: siteState.subtitle || '9-Г',
           schedule: clone(defaultSchedule),
           pdfs: normalizePdfMap(subjectPdfMap || defaultPdfMap),
+          forcedWeek: weekSelect && ['1', '2'].includes(weekSelect.value) ? weekSelect.value : null,
+          splashEnabled: splashToggle ? splashToggle.checked : true,
+          blockedDevices: siteState.blockedDevices || {},
           updatedAt: Date.now()
         };
 
         siteState = nextState;
+        globalWeekOverride = nextState.forcedWeek;
+        updateWeekTumblerUI();
+        applySplashSetting();
         await set(ref(db, 'site/content'), nextState);
       }
 
@@ -1177,9 +1259,44 @@
           subtitle: '9-Г',
           schedule: clone(defaultSchedule),
           pdfs: JSON.parse(JSON.stringify(defaultPdfMap)),
+          forcedWeek: null,
+          splashEnabled: true,
+          blockedDevices: {},
           updatedAt: Date.now()
         };
+        globalWeekOverride = null;
+        updateWeekTumblerUI();
+        applySplashSetting();
         await set(ref(db, 'site/content'), siteState);
+      }
+
+      function applyAccessState() {
+        const blockedScreen = document.getElementById('blockedScreen');
+        const page = document.querySelector('.page');
+        currentDeviceBlocked = Boolean(currentDeviceId && siteState.blockedDevices && siteState.blockedDevices[currentDeviceId]);
+        if (blockedScreen) blockedScreen.style.display = currentDeviceBlocked ? 'grid' : '';
+        if (page) page.style.display = currentDeviceBlocked ? 'none' : '';
+      }
+
+      function applySplashSetting() {
+        if (siteState.splashEnabled !== false) return;
+        const splash = document.getElementById('splashScreen');
+        if (splash) splash.classList.add('hidden');
+        document.body.classList.add('loaded');
+      }
+
+      async function toggleDeviceBlock(deviceId) {
+        if (!deviceId) return;
+        const blockedDevices = { ...(siteState.blockedDevices || {}) };
+        if (blockedDevices[deviceId]) {
+          delete blockedDevices[deviceId];
+        } else {
+          blockedDevices[deviceId] = true;
+        }
+        siteState = { ...siteState, blockedDevices, updatedAt: Date.now() };
+        await set(ref(db, 'site/content'), siteState);
+        updateDeviceList(window.__sputnikDevices || {});
+        applyAccessState();
       }
 
       function getDeviceId() {
@@ -1219,6 +1336,7 @@
       function updateDeviceList(devices) {
         const list = document.getElementById('deviceList');
         list.innerHTML = '';
+        window.__sputnikDevices = devices || {};
 
         const safeDevices = devices && typeof devices === 'object' ? devices : {};
         const grouped = Object.values(safeDevices).reduce((acc, device) => {
@@ -1234,9 +1352,7 @@
           return acc;
         }, new Map());
 
-        const activeDevices = Array.from(grouped.values())
-          .filter((device) => Date.now() - Number(device.lastSeen) < 45000)
-          .sort((a, b) => Number(b.lastSeen) - Number(a.lastSeen));
+        const activeDevices = Array.from(grouped.values()).sort((a, b) => Number(b.lastSeen) - Number(a.lastSeen));
 
         if (!activeDevices.length) {
           list.innerHTML = '<li>Немає активних пристроїв</li>';
@@ -1248,13 +1364,21 @@
           const label = device.label || device.deviceName || 'browser';
           const ip = device.ip || 'unknown';
           const lastSeen = new Date(device.lastSeen).toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' });
+          const isBlocked = Boolean(siteState.blockedDevices && siteState.blockedDevices[device.deviceId]);
+          item.classList.toggle('device-blocked', isBlocked);
           item.innerHTML = `<strong>${label}</strong><br><span>${ip}</span><br><small>${lastSeen}</small>`;
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.textContent = isBlocked ? 'allow' : 'block';
+          button.addEventListener('click', () => toggleDeviceBlock(device.deviceId));
+          item.appendChild(button);
           list.appendChild(item);
         });
       }
 
       function startPresence() {
         const deviceId = getDeviceId();
+        currentDeviceId = deviceId;
         const presenceRef = ref(db, `presence/${deviceId}`);
         const payload = {
           deviceId,
@@ -1280,12 +1404,6 @@
           }
         });
 
-        try {
-          onDisconnect(presenceRef).remove();
-        } catch (error) {
-          // Ignore Firebase permission denials and continue in local-only mode.
-        }
-
         const heartbeat = setInterval(() => {
           const nextPayload = {
             deviceId,
@@ -1304,11 +1422,6 @@
 
         window.addEventListener('beforeunload', () => {
           clearInterval(heartbeat);
-          try {
-            remove(presenceRef).catch(() => {});
-          } catch (error) {
-            // Ignore cleanup error.
-          }
         });
       }
 
@@ -1363,6 +1476,13 @@
 
         document.getElementById('darkModeToggle').addEventListener('change', toggleDarkMode);
 
+        document.getElementById('randomColorToggle').addEventListener('change', (event) => {
+          userSettings.randomColor = event.target.checked;
+          if (userSettings.randomColor) applyRandomAccentIfEnabled();
+          saveSettings();
+          updateSettingsUI();
+        });
+
         document.querySelectorAll('.color-option').forEach(el => {
           el.addEventListener('click', () => setAccentColor(el.dataset.color));
         });
@@ -1371,6 +1491,10 @@
         if (customColorPicker) {
           customColorPicker.addEventListener('input', (event) => setAccentColor(event.target.value));
         }
+
+        document.querySelectorAll('.wallpaper-option').forEach((element) => {
+          element.addEventListener('click', () => setWallpaper(element.dataset.wallpaper));
+        });
 
         document.querySelectorAll('.week-btn').forEach(b=>{
           b.addEventListener('click', ()=> setWeekType(b.dataset.week));
@@ -1503,8 +1627,12 @@
               pageTitle: (data.pageTitle === 'Outland' ? 'Sputnik' : data.pageTitle) || 'Sputnik',
               subtitle: subtitle,
               schedule: forcedSchedule,
-              pdfs: mergedPdfs
+              pdfs: mergedPdfs,
+              forcedWeek: data.forcedWeek === '1' || data.forcedWeek === '2' ? data.forcedWeek : null,
+              splashEnabled: data.splashEnabled !== false,
+              blockedDevices: data.blockedDevices && typeof data.blockedDevices === 'object' ? data.blockedDevices : {}
             };
+            globalWeekOverride = siteState.forcedWeek;
             subjectPdfMap = mergedPdfs;
             await set(contentRef, siteState);
           } else {
@@ -1520,9 +1648,16 @@
               pageTitle: (data.pageTitle === 'Outland' ? 'Sputnik' : data.pageTitle) || 'Sputnik',
               subtitle: data.subtitle || '9-Г',
               schedule: forcedSchedule,
-              pdfs: merged
+              pdfs: merged,
+              forcedWeek: data.forcedWeek === '1' || data.forcedWeek === '2' ? data.forcedWeek : null,
+              splashEnabled: data.splashEnabled !== false,
+              blockedDevices: data.blockedDevices && typeof data.blockedDevices === 'object' ? data.blockedDevices : {}
             };
+            globalWeekOverride = siteState.forcedWeek;
             subjectPdfMap = merged;
+            updateWeekTumblerUI();
+            applySplashSetting();
+            applyAccessState();
             fillAdminForm();
             refreshViews();
           });
@@ -1560,6 +1695,7 @@
       bindEvents();
       updateAdminUI();
       applySettings();
+      applyRandomAccentIfEnabled();
       updateSettingsUI();
       fillAdminForm();
       updateWeekTumblerUI();
@@ -1572,6 +1708,10 @@
       }, 1000);
 
       window.addEventListener('load', () => {
+        if (siteState.splashEnabled === false) {
+          applySplashSetting();
+          return;
+        }
         setTimeout(() => {
           const splash = document.getElementById('splashScreen');
           if (splash) {
