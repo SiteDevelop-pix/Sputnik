@@ -3,6 +3,7 @@ window.subjectMeetConfig = {
   "Алгебра": "https://meet.google.com/vni-cwzx-jxj?authuser=6&hs=179",
   "Геометрія": "https://meet.google.com/zws-doix-hki?authuser=6&hs=179",
   "Фізична культура": "",
+  "Технології": "https://meet.google.com/xdb-upcg-uze?authuser=6&hs=179",
   "Фінансова грамотність": "https://meet.google.com/yks-vzmh-wkz?authuser=6&hs=179",
   "Правознавство": "https://meet.google.com/oqn-saxc-qyd?authuser=6&hs=179",
   "Всесвітня історія": "https://meet.google.com/swu-zivk-oiw?authuser=6&hs=179",
