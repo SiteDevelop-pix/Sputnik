@@ -280,6 +280,55 @@
       </div>
 
       <div class="settings-section">
+        <label class="settings-label">Звук при натисканні</label>
+        <div class="toggle-switch">
+          <label class="switch">
+            <input type="checkbox" id="clickSoundToggle" checked />
+            <span class="slider"></span>
+          </label>
+          <span>Увімкнути звук</span>
+        </div>
+        <div class="settings-range-wrap">
+          <label class="settings-range-label" for="clickSoundVolume">Гучність</label>
+          <div class="settings-range-row">
+            <input id="clickSoundVolume" type="range" min="0" max="100" value="20" />
+            <span id="clickSoundVolumeValue">20%</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <label class="settings-label">Ефект натискання</label>
+        <div class="toggle-switch">
+          <label class="switch">
+            <input type="checkbox" id="clickEffectToggle" checked />
+            <span class="slider"></span>
+          </label>
+          <span>Увімкнути ефект</span>
+        </div>
+        <div class="settings-select-wrap">
+          <label class="settings-range-label" for="clickEffectSelect">Варіант ефекту</label>
+          <select id="clickEffectSelect" class="settings-select">
+            <option value="pulse">Пульс</option>
+            <option value="ripple">Хвиля</option>
+            <option value="shake">Трясіння</option>
+            <option value="pop">Стрибок</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <label class="settings-label">Варіант завантаження</label>
+        <div class="settings-select-wrap">
+          <select id="loadingVariantSelect" class="settings-select">
+            <option value="classic">Класичний</option>
+            <option value="pulse">Пульс</option>
+            <option value="orbit">Орбіта</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="settings-section">
         <label class="settings-label">Кастомні шпалери</label>
         <div class="wallpaper-picker" role="group" aria-label="Кастомні шпалери">
           <button type="button" class="wallpaper-option wallpaper-standard active" data-wallpaper="standard" title="Стандартні"></button>
@@ -361,7 +410,12 @@
         accentColor: 'sputnik.accentColor',
         language: 'sputnik.language',
         randomColor: 'sputnik.randomColor',
-        wallpaper: 'sputnik.wallpaper'
+        wallpaper: 'sputnik.wallpaper',
+        clickSoundEnabled: 'sputnik.clickSoundEnabled',
+        clickSoundVolume: 'sputnik.clickSoundVolume',
+        clickEffectEnabled: 'sputnik.clickEffectEnabled',
+        clickEffectStyle: 'sputnik.clickEffectStyle',
+        loadingVariant: 'sputnik.loadingVariant'
       };
       // тумблер проверки недель: '1'|'2'|null(авто)
       let forcedWeek = localStorage.getItem('sputnik.forcedWeek'); // null = авто
@@ -493,8 +547,16 @@
         darkMode: localStorage.getItem(STORAGE_KEYS.darkMode) === '1' || false,
         accentColor: localStorage.getItem(STORAGE_KEYS.accentColor) || 'yellow',
         randomColor: localStorage.getItem(STORAGE_KEYS.randomColor) === '1',
-        wallpaper: localStorage.getItem(STORAGE_KEYS.wallpaper) || 'standard'
+        wallpaper: localStorage.getItem(STORAGE_KEYS.wallpaper) || 'standard',
+        clickSoundEnabled: localStorage.getItem(STORAGE_KEYS.clickSoundEnabled) !== '0',
+        clickSoundVolume: Number(localStorage.getItem(STORAGE_KEYS.clickSoundVolume) || 20),
+        clickEffectEnabled: localStorage.getItem(STORAGE_KEYS.clickEffectEnabled) !== '0',
+        clickEffectStyle: localStorage.getItem(STORAGE_KEYS.clickEffectStyle) || 'pulse',
+        loadingVariant: localStorage.getItem(STORAGE_KEYS.loadingVariant) || 'classic'
       };
+
+      const VALID_CLICK_EFFECTS = ['pulse', 'ripple', 'shake', 'pop'];
+      const VALID_LOADING_VARIANTS = ['classic', 'pulse', 'orbit'];
 
       function t(key) {
         return translations.uk[key];
@@ -534,6 +596,37 @@
         localStorage.setItem(STORAGE_KEYS.accentColor, userSettings.accentColor);
         localStorage.setItem(STORAGE_KEYS.randomColor, userSettings.randomColor ? '1' : '0');
         localStorage.setItem(STORAGE_KEYS.wallpaper, userSettings.wallpaper);
+        localStorage.setItem(STORAGE_KEYS.clickSoundEnabled, userSettings.clickSoundEnabled ? '1' : '0');
+        localStorage.setItem(STORAGE_KEYS.clickSoundVolume, String(Math.max(0, Math.min(100, Number(userSettings.clickSoundVolume) || 0))));
+        localStorage.setItem(STORAGE_KEYS.clickEffectEnabled, userSettings.clickEffectEnabled ? '1' : '0');
+        localStorage.setItem(STORAGE_KEYS.clickEffectStyle, VALID_CLICK_EFFECTS.includes(userSettings.clickEffectStyle) ? userSettings.clickEffectStyle : 'pulse');
+        localStorage.setItem(STORAGE_KEYS.loadingVariant, VALID_LOADING_VARIANTS.includes(userSettings.loadingVariant) ? userSettings.loadingVariant : 'classic');
+      }
+
+      function applySoundSettings() {
+        const volume = Number(userSettings.clickSoundVolume) || 0;
+        const enabled = Boolean(userSettings.clickSoundEnabled) && volume > 0;
+        clickSound.volume = enabled ? volume / 100 : 0;
+        clickSound.muted = !enabled;
+      }
+
+      function applyLoadingVariant() {
+        const splashScreen = document.getElementById('splashScreen');
+        if (!splashScreen) return;
+        splashScreen.classList.remove('variant-classic', 'variant-pulse', 'variant-orbit');
+        const variant = VALID_LOADING_VARIANTS.includes(userSettings.loadingVariant) ? userSettings.loadingVariant : 'classic';
+        splashScreen.classList.add(`variant-${variant}`);
+      }
+
+      function triggerClickEffect(target) {
+        if (!target || !userSettings.clickEffectEnabled) return;
+        const effect = VALID_CLICK_EFFECTS.includes(userSettings.clickEffectStyle) ? userSettings.clickEffectStyle : 'pulse';
+        target.classList.remove('click-effect--pulse', 'click-effect--ripple', 'click-effect--shake', 'click-effect--pop');
+        void target.offsetWidth;
+        target.classList.add(`click-effect--${effect}`);
+        window.setTimeout(() => {
+          target.classList.remove(`click-effect--${effect}`);
+        }, 260);
       }
 
       function toggleDarkMode() {
@@ -575,6 +668,12 @@
         // Обновляем тему
         document.getElementById('darkModeToggle').checked = userSettings.darkMode;
         document.getElementById('randomColorToggle').checked = userSettings.randomColor;
+        document.getElementById('clickSoundToggle').checked = userSettings.clickSoundEnabled;
+        document.getElementById('clickEffectToggle').checked = userSettings.clickEffectEnabled;
+        document.getElementById('clickEffectSelect').value = VALID_CLICK_EFFECTS.includes(userSettings.clickEffectStyle) ? userSettings.clickEffectStyle : 'pulse';
+        document.getElementById('loadingVariantSelect').value = VALID_LOADING_VARIANTS.includes(userSettings.loadingVariant) ? userSettings.loadingVariant : 'classic';
+        document.getElementById('clickSoundVolume').value = String(Math.max(0, Math.min(100, Number(userSettings.clickSoundVolume) || 0)));
+        document.getElementById('clickSoundVolumeValue').textContent = `${Math.max(0, Math.min(100, Number(userSettings.clickSoundVolume) || 0))}%`;
         document.getElementById('themeName').textContent = userSettings.darkMode ? t('dark') : t('light');
 
         // Обновляем цвет
@@ -597,6 +696,9 @@
         document.querySelectorAll('.wallpaper-option').forEach((element) => {
           element.classList.toggle('active', element.dataset.wallpaper === userSettings.wallpaper);
         });
+
+        applySoundSettings();
+        applyLoadingVariant();
 
         // Обновляем текст в панели
         document.getElementById('settingsTitle').textContent = 'Налаштування';
@@ -725,6 +827,10 @@
       }
 
       function playClickSound() {
+        if (!userSettings.clickSoundEnabled) return;
+        const volume = Number(userSettings.clickSoundVolume) || 0;
+        if (volume <= 0) return;
+        clickSound.volume = volume / 100;
         clickSound.currentTime = 0;
         clickSound.play().catch(() => {});
       }
@@ -1469,9 +1575,12 @@
         document.getElementById('closeSettings').addEventListener('click', closeSettings);
 
         document.addEventListener('click', (event) => {
-          if (event.target.closest('button')) {
-            playClickSound();
+          const clickable = event.target.closest('button, a');
+          if (!clickable) return;
+          if (userSettings.clickEffectEnabled) {
+            triggerClickEffect(clickable);
           }
+          playClickSound();
         });
 
         document.getElementById('darkModeToggle').addEventListener('change', toggleDarkMode);
@@ -1479,6 +1588,36 @@
         document.getElementById('randomColorToggle').addEventListener('change', (event) => {
           userSettings.randomColor = event.target.checked;
           if (userSettings.randomColor) applyRandomAccentIfEnabled();
+          saveSettings();
+          updateSettingsUI();
+        });
+
+        document.getElementById('clickSoundToggle').addEventListener('change', (event) => {
+          userSettings.clickSoundEnabled = event.target.checked;
+          saveSettings();
+          updateSettingsUI();
+        });
+
+        document.getElementById('clickSoundVolume').addEventListener('input', (event) => {
+          userSettings.clickSoundVolume = Number(event.target.value) || 0;
+          saveSettings();
+          updateSettingsUI();
+        });
+
+        document.getElementById('clickEffectToggle').addEventListener('change', (event) => {
+          userSettings.clickEffectEnabled = event.target.checked;
+          saveSettings();
+          updateSettingsUI();
+        });
+
+        document.getElementById('clickEffectSelect').addEventListener('change', (event) => {
+          userSettings.clickEffectStyle = event.target.value;
+          saveSettings();
+          updateSettingsUI();
+        });
+
+        document.getElementById('loadingVariantSelect').addEventListener('change', (event) => {
+          userSettings.loadingVariant = event.target.value;
           saveSettings();
           updateSettingsUI();
         });
