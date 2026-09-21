@@ -772,7 +772,9 @@ body.loaded .page {
 
 .fire-card {
   min-width: 96px;
-  min-height: 42px;
+  width: 96px;
+  height: 42px;
+  min-height: 0;
   padding: 5px 9px;
   border: 3px solid var(--dark);
   border-radius: 11px;
@@ -2017,7 +2019,9 @@ body.font-size-large {
   .tabs .fire-card {
     grid-column: 1 / -1;
     justify-self: end;
-    min-width: 148px;
+    width: 96px;
+    min-width: 96px;
+    height: 42px;
   }
 
   .utility-bar {
