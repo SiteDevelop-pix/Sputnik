@@ -90,6 +90,16 @@
               <path d="M19.43 12.98c.04-.32.07-.64.07-.98 0-.34-.03-.66-.07-.98l1.85-1.41c.17-.13.22-.38.1-.59l-1.74-3.01c-.12-.22-.38-.29-.59-.17l-2.18 1.73c-.45-.35-.96-.62-1.5-.81l-.33-2.76c-.04-.24-.24-.41-.49-.41h-3.48c-.25 0-.45.17-.49.41l-.33 2.76c-.54.19-1.05.46-1.5.81l-2.18-1.73c-.22-.12-.47-.05-.59.17L2.74 8.87c-.12.21-.08.46.1.59l1.85 1.41c-.04.32-.07.65-.07.98 0 .33.03.66.07.98l-1.85 1.41c-.17.13-.22.38-.1.59l1.74 3.01c.12.22.38.29.59.17l2.18-1.73c.45.35.96.62 1.5.81l.33 2.76c.04.24.24.41.49.41h3.48c.25 0 .45-.17.49-.41l.33-2.76c.54-.19 1.05-.46 1.5-.81l2.18 1.73c.22.12.47.05.59-.17l1.74-3.01c.12-.22.08-.46-.1-.59l-1.85-1.41zM12 15c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3z" fill="#111111"/>
             </svg>
           </button>
+          <div class="info-card fire-card" id="fireCard" aria-live="polite">
+            <div class="fire-value">
+              <span class="fire-icon" id="fireIcon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" role="img" aria-label="Вогник">
+                  <path d="M13.2 2.2c.35 3.03-1.1 4.56-2.56 6.02-1.18 1.18-2.3 2.3-2.3 4.28 0 1.35.7 2.43 1.66 3.12-.08-.3-.12-.62-.12-.94 0-1.5.83-2.58 2.02-3.77.58 1.55 2.57 2.42 2.57 4.65 0 .48-.1.93-.27 1.35 1.2-.62 2.08-1.85 2.08-3.55 0-1.24-.46-2.33-1.24-3.37 2.53 1.43 4.16 3.85 4.16 6.66 0 4.08-3.1 6.96-7.2 6.96-4.2 0-7.2-2.82-7.2-6.72 0-3.04 1.62-5.18 3.9-7.42C10.32 7.72 11.83 5.46 13.2 2.2Z" />
+                </svg>
+              </span>
+              <span class="fire-label">Вогник</span>
+            </div>
+          </div>
         </nav>
       </header>
 
@@ -417,6 +427,7 @@
         clickEffectStyle: 'sputnik.clickEffectStyle',
         loadingVariant: 'sputnik.loadingVariant'
       };
+      const FIRE_STORAGE_KEY = 'sputnik.learningFire';
       // тумблер проверки недель: '1'|'2'|null(авто)
       let forcedWeek = localStorage.getItem('sputnik.forcedWeek'); // null = авто
       if (forcedWeek !== '1' && forcedWeek !== '2') forcedWeek = null;
@@ -554,6 +565,8 @@
         clickEffectStyle: localStorage.getItem(STORAGE_KEYS.clickEffectStyle) || 'pulse',
         loadingVariant: localStorage.getItem(STORAGE_KEYS.loadingVariant) || 'classic'
       };
+
+      let fireState = loadFireState();
 
       const VALID_CLICK_EFFECTS = ['pulse', 'ripple', 'shake', 'pop'];
       const VALID_LOADING_VARIANTS = ['classic', 'pulse', 'orbit'];
@@ -756,6 +769,86 @@
         const utcDate = Date.UTC(year, month - 1, day);
         const jsDate = new Date(utcDate);
         return allDayNames[(jsDate.getUTCDay() + 6) % 7] || 'Понеділок';
+      }
+
+      function getKyivDateKey() {
+        const { year, month, day } = getKyivParts();
+        return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      }
+
+      function getPreviousSchoolDate(dateKey) {
+        const [year, month, day] = dateKey.split('-').map(Number);
+        const date = new Date(Date.UTC(year, month - 1, day));
+        do {
+          date.setUTCDate(date.getUTCDate() - 1);
+        } while ([0, 6].includes(date.getUTCDay()));
+        return date.toISOString().slice(0, 10);
+      }
+
+      function loadFireState() {
+        try {
+          const saved = JSON.parse(localStorage.getItem(FIRE_STORAGE_KEY) || '{}');
+          return {
+            totalLessons: Number(saved.totalLessons) || 0,
+            currentStreak: Number(saved.currentStreak) || 0,
+            bestStreak: Number(saved.bestStreak) || 0,
+            lastActivityDate: typeof saved.lastActivityDate === 'string' ? saved.lastActivityDate : null,
+            completed: saved.completed && typeof saved.completed === 'object' ? saved.completed : {}
+          };
+        } catch (error) {
+          return { totalLessons: 0, currentStreak: 0, bestStreak: 0, lastActivityDate: null, completed: {} };
+        }
+      }
+
+      function saveFireState() {
+        localStorage.setItem(FIRE_STORAGE_KEY, JSON.stringify(fireState));
+      }
+
+      function isLessonCompleted(lesson, dateKey = getKyivDateKey()) {
+        const lessonKey = `${getWeekType()}:${lesson.number}:${lesson.subject}`;
+        return Array.isArray(fireState.completed[dateKey]) && fireState.completed[dateKey].includes(lessonKey);
+      }
+
+      function markLessonVisited(lesson) {
+        const todayName = getCurrentKyivDayName();
+        if (selectedDay !== todayName || !dayNames.includes(todayName)) return false;
+
+        const nowMinutes = getKyivMinutesNow();
+        const startMinutes = getTimeMinutes(lesson.time);
+        if (nowMinutes < startMinutes || nowMinutes >= startMinutes + lessonDuration) return false;
+
+        const dateKey = getKyivDateKey();
+        const lessonKey = `${getWeekType()}:${lesson.number}:${lesson.subject}`;
+        const completedToday = Array.isArray(fireState.completed[dateKey]) ? fireState.completed[dateKey] : [];
+        if (completedToday.includes(lessonKey)) return false;
+
+        fireState.completed[dateKey] = [...completedToday, lessonKey];
+        fireState.totalLessons += 1;
+        if (fireState.lastActivityDate !== dateKey) {
+          const previousSchoolDate = getPreviousSchoolDate(dateKey);
+          fireState.currentStreak = fireState.lastActivityDate === previousSchoolDate
+            ? fireState.currentStreak + 1
+            : 1;
+          fireState.bestStreak = Math.max(fireState.bestStreak, fireState.currentStreak);
+          fireState.lastActivityDate = dateKey;
+        }
+
+        const dates = Object.keys(fireState.completed).sort().slice(-45);
+        fireState.completed = dates.reduce((result, key) => {
+          result[key] = fireState.completed[key];
+          return result;
+        }, {});
+        saveFireState();
+        updateFireUI();
+        return true;
+      }
+
+      function updateFireUI() {
+        const card = document.getElementById('fireCard');
+        if (!card) return;
+        const todayKey = getKyivDateKey();
+        const activeToday = Array.isArray(fireState.completed[todayKey]) && fireState.completed[todayKey].length > 0;
+        card.classList.toggle('is-burning', activeToday);
       }
 
       function getKyivMinutesNow() {
@@ -1119,6 +1212,7 @@
             const card = document.createElement('div');
             card.className = 'subject-btn subject-btn--split';
             card.style.setProperty('--progress', '0%');
+            if (isLessonCompleted(lesson)) card.classList.add('completed');
 
             const isActiveNow = nowMinutes >= startMinutes && nowMinutes < endMinutes;
             const isPast = endMinutes <= nowMinutes;
@@ -1153,6 +1247,9 @@
               btn.target = '_blank';
               btn.rel = 'noopener noreferrer';
               btn.textContent = label;
+              btn.addEventListener('click', () => {
+                if (markLessonVisited(lesson)) card.classList.add('completed');
+              });
               links.appendChild(btn);
             });
 
@@ -1187,6 +1284,9 @@
             link.href = meetUrl;
             link.target = '_blank';
             link.rel = 'noopener noreferrer';
+            link.addEventListener('click', () => {
+              if (markLessonVisited(lesson)) link.classList.add('completed');
+            });
           } else {
             link.href = 'javascript:void(0)';
             link.setAttribute('aria-disabled', 'true');
@@ -1195,6 +1295,8 @@
               event.preventDefault();
             });
           }
+
+          if (isLessonCompleted(lesson)) link.classList.add('completed');
 
           const badge = document.createElement('span');
           badge.className = 'subject-number';
@@ -1325,6 +1427,7 @@
         renderBooks();
         renderSchedule();
         updateTodayCard();
+        updateFireUI();
         // Keep day switcher hidden when Books panel is active (prevents Firebase updates from showing it)
         const daySwitcher = document.getElementById('daySwitcher');
         const activePanel = document.querySelector('.panel.active');
